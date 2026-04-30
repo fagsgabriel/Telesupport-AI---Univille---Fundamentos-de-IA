@@ -37,7 +37,10 @@ function App() {
 
   return (
     <main className="app">
-      <h1>TeleSupport AI</h1>
+      <header className="app-header">
+        <h1>TeleSupport AI</h1>
+        <p>Análise inteligente de chamadas com transcrição, resumo e classificação.</p>
+      </header>
       <Upload apiBaseUrl={API_BASE_URL} onUploadSuccess={fetchCalls} />
       <CallList calls={calls} loading={loadingCalls} error={callsError} />
     </main>

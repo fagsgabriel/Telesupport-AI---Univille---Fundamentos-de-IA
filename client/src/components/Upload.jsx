@@ -71,8 +71,9 @@ function Upload({ apiBaseUrl, onUploadSuccess }) {
   return (
     <section className="card">
       <h2>Upload de áudio</h2>
-      <form onSubmit={handleSubmit}>
+      <form className="upload-form" onSubmit={handleSubmit}>
         <input
+          className="file-input"
           type="file"
           accept={ACCEPTED_TYPES}
           onChange={handleFileChange}
@@ -88,13 +89,13 @@ function Upload({ apiBaseUrl, onUploadSuccess }) {
       {result ? (
         <div className="result">
           <p>
-            <strong>Transcription:</strong> {result.transcription}
+            <strong>Transcrição:</strong> {result.transcription}
           </p>
           <p>
-            <strong>Summary:</strong> {result.summary}
+            <strong>Resumo:</strong> {result.summary}
           </p>
           <p>
-            <strong>Category:</strong> {result.category}
+            <strong>Categoria:</strong> {result.category}
           </p>
         </div>
       ) : null}
