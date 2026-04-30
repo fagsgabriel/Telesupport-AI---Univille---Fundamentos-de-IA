@@ -73,8 +73,10 @@ web_modules/
 # Project sensitive/runtime data
 server/.env
 server/.env.*
+!server/.env.example
 client/.env
 client/.env.*
+!client/.env.example
 server/database/*.db
 server/database/*.sqlite
 server/database/*.sqlite3
