@@ -1,0 +1,184 @@
+# TeleSupport AI - Regras Estritas de Desenvolvimento
+
+## 1. Objective
+Construir um sistema fullstack de analytics para call center com IA, capaz de receber áudios, transcrever chamadas, analisar conteúdo textual, armazenar resultados e disponibilizar dados via API, com opção de busca semântica.
+
+## 2. Tech Stack (STRICT)
+- Backend: Node.js + Express
+- Frontend: React (Vite)
+- Database: SQLite
+- AI:
+  - Whisper API (transcription)
+  - OpenAI GPT (analysis)
+
+## 3. Architecture Rules
+- Estrutura principal obrigatória:
+  - `/server`
+  - `/client`
+- O backend deve seguir a organização:
+  - `controllers/`
+  - `services/`
+  - `routes/`
+  - `database/`
+- Regra obrigatória: nunca colocar lógica de negócio dentro de `routes/`.
+- Controllers devem apenas:
+  - receber requisição
+  - chamar services
+  - retornar resposta
+- Services devem conter toda a lógica de negócio e integração com APIs externas.
+- O banco SQLite deve ser inicializado automaticamente ao iniciar o servidor.
+- Se a tabela não existir, deve ser criada.
+- Arquivos de áudio devem ser armazenados na pasta `/uploads`.
+- O nome do arquivo deve ser único para evitar sobrescrita.
+- Após processamento (sucesso ou erro), o arquivo deve ser removido da pasta `/uploads`.
+- Garantir que a remoção não afete dados já persistidos.
+
+## 4. Coding Rules
+- Usar `async/await` em operações assíncronas.
+- Sempre tratar erros com `try/catch`.
+- Nunca hardcode de chaves de API; usar variáveis de ambiente em `.env`.
+- Manter código simples, legível e direto.
+- Todas as rotas devem retornar erros no formato:
+  ```json
+  {
+    "error": "mensagem descritiva"
+  }
+  ```
+- Chamadas para APIs externas (Whisper e GPT) devem ter tratamento de timeout e fallback de erro.
+
+## 5. API Requirements
+Todas as respostas de sucesso devem seguir o padrão:
+
+```json
+{
+  "success": true,
+  "data": { "...": "..." }
+}
+```
+
+Todas as respostas de erro devem seguir o padrão:
+
+```json
+{
+  "success": false,
+  "error": "mensagem"
+}
+```
+
+### `POST /upload`
+Responsabilidades:
+- Upload de áudio
+- Sanitizar o nome do arquivo antes de salvar
+- Evitar caracteres especiais perigosos e caminhos maliciosos
+- Gerar hash do arquivo (ex.: `SHA-256`) no momento do upload
+- Usar o hash para verificar duplicação no banco
+- Se já existir registro com mesmo `file_name` ou `hash`, retornar registro existente sem reprocessar
+- Transcrição
+- Análise de texto
+- Persistência no banco
+- Limitar upload de áudio a no máximo 10MB.
+- Se o arquivo exceder 10MB, rejeitar com erro apropriado.
+- Validar tipo de arquivo no upload.
+- Aceitar apenas formatos de áudio: `mp3`, `wav`, `m4a`.
+- Rejeitar qualquer outro formato (ex.: `.exe`) com erro apropriado.
+
+Resposta JSON obrigatória:
+- `transcription`
+- `summary`
+- `category`
+
+### `GET /calls`
+- Retornar lista de todas as chamadas processadas.
+
+### `GET /search?q=`
+- Executar busca semântica (opcional).
+- Endpoints devem ser testáveis via ferramentas como Postman ou Thunder Client.
+
+### `GET /health`
+- Retornar status de saúde da API com:
+  ```json
+  { "status": "ok" }
+  ```
+
+## 6. AI Behavior
+- O resumo (`summary`) deve ser curto, com no máximo 3 linhas.
+- A classificação (`category`) deve ser estritamente uma das seguintes:
+  - `reclamacao`
+  - `duvida`
+  - `elogio`
+- A resposta da IA deve sempre retornar em JSON válido com:
+  ```json
+  {
+    "summary": "string",
+    "category": "reclamacao" | "duvida" | "elogio"
+  }
+  ```
+- A resposta da IA deve ser parseada obrigatoriamente como JSON antes de ser utilizada.
+- Se a resposta não for um JSON válido, deve ser tratada como erro.
+- A categoria retornada pela IA deve ser normalizada:
+  - converter para minúsculas
+  - remover espaços extras
+  - validar contra os valores permitidos
+  - caso inválido, retornar erro ou classificar como `duvida` por padrão
+
+## 7. Database Schema
+Tabela: `calls`
+
+Campos obrigatórios:
+- `id`
+- `file_name`
+- `hash`
+- `transcription`
+- `summary`
+- `category`
+- `status` (`processing` | `completed` | `failed`)
+- `created_at`
+
+Regra de status:
+- Ao iniciar processamento: `processing`
+- Em caso de sucesso: `completed`
+- Em caso de erro: `failed`
+- O status deve ser atualizado durante cada etapa do pipeline.
+- Nunca deixar registros sem status definido.
+
+Regra de consistência do processamento de upload:
+- Criar registro inicial com status `processing`.
+- Só atualizar para `completed` após todas as etapas finalizarem com sucesso.
+- Em caso de erro em qualquer etapa, atualizar para `failed`.
+- Nunca deixar registros sem status definido.
+
+## 8. UI Requirements
+O frontend deve incluir:
+- Upload de áudio
+- Lista de chamadas processadas
+- Exibição de resumo e categoria
+
+## 9. Development Strategy
+Ordem recomendada:
+1. Construir o backend primeiro
+2. Testar endpoints
+3. Integrar IA
+4. Construir frontend
+5. Implementar RAG opcionalmente
+
+## 10. Constraints
+- Evitar dependências desnecessárias.
+- Não fazer overengineering.
+- Manter a implementação simples.
+- A porta do servidor deve ser configurável via variável de ambiente (`PORT`).
+- Caso `PORT` não esteja definida, usar `3000` como padrão.
+- Integrações externas devem falhar de forma controlada (timeout + resposta de erro padronizada), sem quebrar o servidor.
+- Antes de processar um novo áudio, verificar se já existe registro com mesmo `file_name` ou `hash`.
+- Se já existir, retornar o registro existente em vez de reprocessar.
+
+## 12. Logging Mínimo (Demo)
+Registrar logs básicos para depuração:
+- upload recebido
+- transcrição iniciada/finalizada
+- análise iniciada/finalizada
+- erros
+
+## 11. Behavior Instructions
+- Sempre gerar código completo e funcional.
+- Sempre explicar brevemente o que foi feito.
+- Sempre sugerir melhorias incrementais.
