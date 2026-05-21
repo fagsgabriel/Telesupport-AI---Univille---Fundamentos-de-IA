@@ -1,18 +1,108 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+
+function getSpeechRecognitionConstructor() {
+  if (typeof window === 'undefined') {
+    return null
+  }
+
+  return window.SpeechRecognition || window.webkitSpeechRecognition || null
+}
 
 function AskPanel({ apiBaseUrl }) {
   const [question, setQuestion] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [result, setResult] = useState(null)
+  const [isListening, setIsListening] = useState(false)
+  const [speechSupported, setSpeechSupported] = useState(false)
   const audioRef = useRef(null)
+  const recognitionRef = useRef(null)
+
+  useEffect(() => {
+    const SpeechRecognition = getSpeechRecognitionConstructor()
+    if (!SpeechRecognition) {
+      setSpeechSupported(false)
+      return undefined
+    }
+
+    setSpeechSupported(true)
+    const recognition = new SpeechRecognition()
+    recognition.lang = 'pt-BR'
+    recognition.continuous = false
+    recognition.interimResults = true
+
+    recognition.onresult = (event) => {
+      let transcript = ''
+      for (let index = event.resultIndex; index < event.results.length; index += 1) {
+        transcript += event.results[index][0].transcript
+      }
+      setQuestion(transcript.trim())
+    }
+
+    recognition.onerror = (speechError) => {
+      setIsListening(false)
+
+      if (speechError.error === 'not-allowed') {
+        setError('Permissão do microfone negada. Autorize o acesso no navegador.')
+        return
+      }
+
+      if (speechError.error === 'no-speech') {
+        setError('Nenhuma fala detectada. Tente gravar novamente.')
+        return
+      }
+
+      if (speechError.error !== 'aborted') {
+        setError(`Erro no reconhecimento de voz: ${speechError.error}`)
+      }
+    }
+
+    recognition.onend = () => {
+      setIsListening(false)
+    }
+
+    recognitionRef.current = recognition
+
+    return () => {
+      recognition.onresult = null
+      recognition.onerror = null
+      recognition.onend = null
+      recognition.abort()
+      recognitionRef.current = null
+    }
+  }, [])
+
+  const handleToggleRecording = () => {
+    const recognition = recognitionRef.current
+
+    if (!recognition) {
+      setError('Reconhecimento de voz não suportado. Use o Google Chrome.')
+      return
+    }
+
+    if (isListening) {
+      recognition.stop()
+      setIsListening(false)
+      return
+    }
+
+    setError('')
+
+    try {
+      recognition.start()
+      setIsListening(true)
+    } catch (startError) {
+      setIsListening(false)
+      setError('Não foi possível iniciar a gravação. Aguarde e tente novamente.')
+    }
+  }
 
   const handleSubmit = async (event) => {
     event.preventDefault()
 
     const normalizedQuestion = question.trim()
     if (!normalizedQuestion) {
-      setError('Digite uma pergunta antes de enviar.')
+      setError('Digite ou grave uma pergunta antes de enviar.')
       return
     }
 
@@ -64,8 +154,8 @@ function AskPanel({ apiBaseUrl }) {
     <section className="card">
       <h2>Consulta RAG com áudio</h2>
       <p className="ask-description">
-        Faça uma pergunta sobre as chamadas processadas. A resposta será gerada com
-        contexto semântico e convertida em áudio.
+        Faça uma pergunta por texto ou voz sobre as chamadas processadas. A resposta será
+        gerada com contexto semântico e convertida em áudio.
       </p>
 
       <form className="ask-form" onSubmit={handleSubmit}>
@@ -75,12 +165,33 @@ function AskPanel({ apiBaseUrl }) {
           value={question}
           onChange={(event) => setQuestion(event.target.value)}
           placeholder="Ex.: Quais chamadas foram reclamações sobre atraso?"
-          disabled={loading}
+          disabled={loading || isListening}
         />
-        <button type="submit" disabled={loading || !question.trim()}>
+        <button
+          type="button"
+          className="listen-button"
+          onClick={handleToggleRecording}
+          disabled={loading || !speechSupported}
+          style={isListening ? { background: '#b91c1c', borderColor: '#ef4444' } : undefined}
+        >
+          {isListening ? 'Parar gravação' : 'Gravar pergunta'}
+        </button>
+        <button type="submit" disabled={loading || isListening || !question.trim()}>
           {loading ? 'Consultando...' : 'Perguntar'}
         </button>
       </form>
+
+      {isListening ? (
+        <p className="ask-description" style={{ color: '#93c5fd', marginTop: 10 }}>
+          Ouvindo... fale sua pergunta. O texto será preenchido automaticamente.
+        </p>
+      ) : null}
+
+      {!speechSupported ? (
+        <p className="ask-description" style={{ marginTop: 10 }}>
+          Gravação por voz disponível no Google Chrome (Web Speech API).
+        </p>
+      ) : null}
 
       {error ? <p className="error">{error}</p> : null}
 
